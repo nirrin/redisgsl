@@ -21,30 +21,29 @@ preprocess:
 libredisgsl.so: redisgsl.o
 	g++ -o $@ $< $(GSL_A) $(SHOBJ_LDFLAGS) -lc
 
+clear:
+	clear
+
 clean:
 	rm -rf *.o *.so *.rdb
 
 stop:
 	kill -s SIGTERM `pidof redis-server`
 
-run:	
-	rm -f *.rdb
+run: clear	
+	rm -f *.rdb	
 	redis-server /etc/redis.conf --loadmodule ./libredisgsl.so
 
-test:	
-	redis-cli FLUSHDB
+test-rstat:
 	redis-cli gsl_rstat_alloc A
-	redis-cli gsl_rstat_add A 1
-	redis-cli gsl_rstat_add A 2
-	redis-cli gsl_rstat_add A 3
-	redis-cli gsl_rstat_add A 4
-	redis-cli gsl_rstat_add A 5
-	redis-cli gsl_rstat_add A 6
+	for x in 1 2 3 4 5 6 ; do \
+		redis-cli gsl_rstat_add A $$x ; \
+	done
 	redis-cli gsl_rstat_n A
 	redis-cli gsl_rstat_min A
 	redis-cli gsl_rstat_max A
 	redis-cli gsl_rstat_mean A
-	redis-cli stat_variance A
+	redis-cli gsl_rstat_variance A
 	redis-cli gsl_rstat_sd A
 	redis-cli gsl_rstat_rms A
 	redis-cli gsl_rstat_sd_mean A
@@ -54,33 +53,109 @@ test:
 	redis-cli gsl_rstat_reset A
 	redis-cli gsl_rstat_n A
 	redis-cli gsl_rstat_free A
-	redis-cli gsl_rstat_quantile_alloc A 0.05
-	redis-cli gsl_rstat_quantile_alloc A 0.5
-	redis-cli gsl_rstat_quantile_alloc A 0.95
-	redis-cli gsl_rstat_quantile_add A 0.05 1
-	redis-cli gsl_rstat_quantile_add A 0.5 1
-	redis-cli gsl_rstat_quantile_add A 0.95 1
-	redis-cli gsl_rstat_quantile_add A 0.05 2
-	redis-cli gsl_rstat_quantile_add A 0.5 2
-	redis-cli gsl_rstat_quantile_add A 0.95 2
-	redis-cli gsl_rstat_quantile_add A 0.05 3
-	redis-cli gsl_rstat_quantile_add A 0.5 3
-	redis-cli gsl_rstat_quantile_add A 0.95 3
-	redis-cli gsl_rstat_quantile_add A 0.05 4
-	redis-cli gsl_rstat_quantile_add A 0.5 4
-	redis-cli gsl_rstat_quantile_add A 0.95 4
-	redis-cli gsl_rstat_quantile_add A 0.05 5
-	redis-cli gsl_rstat_quantile_add A 0.5 5
-	redis-cli gsl_rstat_quantile_add A 0.95 5
-	redis-cli gsl_rstat_quantile_add A 0.05 6
-	redis-cli gsl_rstat_quantile_add A 0.5 6
-	redis-cli gsl_rstat_quantile_add A 0.95 6	
-	redis-cli gsl_rstat_quantile_get A 0.05
-	redis-cli gsl_rstat_quantile_get A 0.5
-	redis-cli gsl_rstat_quantile_get A 0.95
-	redis-cli gsl_rstat_quantile_reset A 0.05
-	redis-cli gsl_rstat_quantile_reset A 0.5
-	redis-cli gsl_rstat_quantile_reset A 0.95
-	redis-cli gsl_rstat_quantile_free A 0.05
-	redis-cli gsl_rstat_quantile_free A 0.5
-	redis-cli gsl_rstat_quantile_free A 0.95
+	redis-cli HGETALL GSL
+
+QUANTILES := 0.05 0.5 0.95
+
+test-rstat-quantile:
+	for q in $(QUANTILES) ; do \
+		redis-cli gsl_rstat_quantile_alloc A_$$q q ; \
+	done	
+	for q in $(QUANTILES) ; do \
+		for x in 1 2 3 4 5 6 ; do \
+			redis-cli gsl_rstat_quantile_add A_$$q $$x ; \
+		done \
+	done 
+	for q in $(QUANTILES) ; do \
+		redis-cli gsl_rstat_quantile_get A_$$q ; \
+		redis-cli gsl_rstat_quantile_reset A_$$q ; \
+		redis-cli gsl_rstat_quantile_get A_$$q ; \
+		redis-cli gsl_rstat_quantile_free A_$$q ; \
+	done		
+	redis-cli HGETALL GSL
+
+HISTOGRAMS := A B
+
+test-rstat-histogram:
+	redis-cli gsl_histogram_alloc A 3
+	redis-cli gsl_histogram_alloc B 3
+	redis-cli gsl_histogram_set_ranges A 1 3 5 7
+	redis-cli gsl_histogram_set_ranges_uniform B 1 7
+	for h in $(HISTOGRAMS) ; do \
+		redis-cli gsl_histogram_increment $$h 2 ; \
+		redis-cli gsl_histogram_increment $$h 2 ; \
+		redis-cli gsl_histogram_increment $$h 2 ; \
+		redis-cli gsl_histogram_accumulate $$h 4 2 ; \
+		redis-cli gsl_histogram_increment $$h 6 ; \
+		redis-cli gsl_histogram_get $$h 0 ; \
+		redis-cli gsl_histogram_get $$h 1 ; \
+		redis-cli gsl_histogram_get $$h 2 ; \
+		redis-cli gsl_histogram_get_range $$h 0 ; \
+		redis-cli gsl_histogram_get_range $$h 1 ; \
+		redis-cli gsl_histogram_get_range $$h 2 ; \
+		redis-cli gsl_histogram_max $$h ; \
+		redis-cli gsl_histogram_min $$h ; \
+		redis-cli gsl_histogram_bins $$h ; \
+		redis-cli gsl_histogram_max_val $$h ; \
+		redis-cli gsl_histogram_max_bin $$h ; \
+		redis-cli gsl_histogram_min_val $$h ; \
+		redis-cli gsl_histogram_min_bin $$h ; \
+		redis-cli gsl_histogram_mean $$h ; \
+		redis-cli gsl_histogram_sigma $$h ; \
+		redis-cli gsl_histogram_find $$h 0 ; \
+		redis-cli gsl_histogram_find $$h 1 ; \
+		redis-cli gsl_histogram_find $$h 2 ; \
+		redis-cli gsl_histogram_find $$h 3 ; \
+		redis-cli gsl_histogram_find $$h 4 ; \
+		redis-cli gsl_histogram_find $$h 5 ; \
+		redis-cli gsl_histogram_find $$h 6 ; \
+		redis-cli gsl_histogram_find $$h 7 ; \
+		redis-cli gsl_histogram_find $$h 8 ; \
+		redis-cli gsl_histogram_sum $$h ; \
+	done
+	redis-cli gsl_histogram_alloc C 3
+	redis-cli gsl_histogram_alloc D 3
+	redis-cli gsl_histogram_memcpy A C
+	redis-cli gsl_histogram_memcpy B D
+	redis-cli gsl_histogram_clone A E
+	redis-cli gsl_histogram_clone B F	
+	redis-cli gsl_histogram_reset A
+	redis-cli gsl_histogram_reset B
+	for h in $(HISTOGRAMS) ; do \
+		redis-cli gsl_histogram_get $$h 0 ; \
+		redis-cli gsl_histogram_get $$h 1 ; \
+		redis-cli gsl_histogram_get $$h 2 ; \
+	done
+	redis-cli gsl_histogram_free A
+	redis-cli gsl_histogram_free B
+	for h in C D E F; do \
+		redis-cli gsl_histogram_get $$h 0 ; \
+		redis-cli gsl_histogram_get $$h 1 ; \
+		redis-cli gsl_histogram_get $$h 2 ; \
+		redis-cli gsl_histogram_get_range $$h 0 ; \
+		redis-cli gsl_histogram_get_range $$h 1 ; \
+		redis-cli gsl_histogram_get_range $$h 2 ; \
+		redis-cli gsl_histogram_max $$h ; \
+		redis-cli gsl_histogram_min $$h ; \
+		redis-cli gsl_histogram_bins $$h ; \
+		redis-cli gsl_histogram_max_val $$h ; \
+		redis-cli gsl_histogram_max_bin $$h ; \
+		redis-cli gsl_histogram_min_val $$h ; \
+		redis-cli gsl_histogram_min_bin $$h ; \
+		redis-cli gsl_histogram_mean $$h ; \
+		redis-cli gsl_histogram_sigma $$h ; \
+		redis-cli gsl_histogram_find $$h 0 ; \
+		redis-cli gsl_histogram_find $$h 1 ; \
+		redis-cli gsl_histogram_find $$h 2 ; \
+		redis-cli gsl_histogram_find $$h 3 ; \
+		redis-cli gsl_histogram_find $$h 4 ; \
+		redis-cli gsl_histogram_find $$h 5 ; \
+		redis-cli gsl_histogram_find $$h 6 ; \
+		redis-cli gsl_histogram_find $$h 7 ; \
+		redis-cli gsl_histogram_find $$h 8 ; \
+		redis-cli gsl_histogram_sum $$h ; \
+		redis-cli gsl_histogram_free $$h ; \
+	done
+	redis-cli HGETALL GSL
+
+test: clear test-rstat test-rstat-quantile test-rstat-histogram	
