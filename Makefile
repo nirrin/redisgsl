@@ -113,12 +113,22 @@ test-rstat-histogram:
 		redis-cli gsl_histogram_find $$h 8 ; \
 		redis-cli gsl_histogram_sum $$h ; \
 	done
+	redis-cli gsl_histogram_pdf_alloc P 3
+	redis-cli gsl_histogram_pdf_init P A
+	redis-cli gsl_histogram_pdf_sample P 0.25
+	redis-cli gsl_histogram_pdf_sample P 0.5
+	redis-cli gsl_histogram_pdf_sample P 0.75
+	redis-cli gsl_histogram_pdf_free P
 	redis-cli gsl_histogram_alloc C 3
 	redis-cli gsl_histogram_alloc D 3
 	redis-cli gsl_histogram_memcpy A C
-	redis-cli gsl_histogram_memcpy B D
+	redis-cli gsl_histogram_memcpy B D	
 	redis-cli gsl_histogram_clone A E
-	redis-cli gsl_histogram_clone B F	
+	redis-cli gsl_histogram_clone B F
+	redis-cli gsl_histogram_equal_bins_p A C
+	redis-cli gsl_histogram_equal_bins_p B D
+	redis-cli gsl_histogram_equal_bins_p A E
+	redis-cli gsl_histogram_equal_bins_p B F	
 	redis-cli gsl_histogram_reset A
 	redis-cli gsl_histogram_reset B
 	for h in $(HISTOGRAMS) ; do \
@@ -154,6 +164,39 @@ test-rstat-histogram:
 		redis-cli gsl_histogram_find $$h 7 ; \
 		redis-cli gsl_histogram_find $$h 8 ; \
 		redis-cli gsl_histogram_sum $$h ; \
+	done
+	redis-cli gsl_histogram_add D F
+	redis-cli gsl_histogram_sub D F
+	redis-cli gsl_histogram_mul D F
+	redis-cli gsl_histogram_ADD D F
+	redis-cli gsl_histogram_scale C 50
+	redis-cli gsl_histogram_shift C 50
+	redis-cli gsl_histogram_get C 0
+	redis-cli gsl_histogram_get C 1
+	redis-cli gsl_histogram_get C 2
+	redis-cli gsl_histogram_get_range C 0
+	redis-cli gsl_histogram_get_range C 1
+	redis-cli gsl_histogram_get_range C 2
+	redis-cli gsl_histogram_max C
+	redis-cli gsl_histogram_min C
+	redis-cli gsl_histogram_bins C
+	redis-cli gsl_histogram_max_val C
+	redis-cli gsl_histogram_max_bin C
+	redis-cli gsl_histogram_min_val C
+	redis-cli gsl_histogram_min_bin C
+	redis-cli gsl_histogram_mean C
+	redis-cli gsl_histogram_sigma C
+	redis-cli gsl_histogram_find C 0
+	redis-cli gsl_histogram_find C 1
+	redis-cli gsl_histogram_find C 2
+	redis-cli gsl_histogram_find C 3
+	redis-cli gsl_histogram_find C 4
+	redis-cli gsl_histogram_find C 5
+	redis-cli gsl_histogram_find C 6
+	redis-cli gsl_histogram_find C 7
+	redis-cli gsl_histogram_find C 8
+	redis-cli gsl_histogram_sum C
+	for h in C D E F; do \
 		redis-cli gsl_histogram_free $$h ; \
 	done
 	redis-cli HGETALL GSL

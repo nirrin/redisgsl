@@ -17,8 +17,7 @@ inline RedisModuleString* ptr_to_str(RedisModuleCtx *ctx, const void* p_) {
 }
 
 inline void* str_to_ptr(const RedisModuleString* str_) {	
-	const char* str = RedisModule_StringPtrLen(str_, NULL);	
-	return (void*)atoll(str);
+	return (void*)atoll(RedisModule_StringPtrLen(str_, NULL));
 }
 
 RedisModuleString* GSL_NAME = NULL;
@@ -32,24 +31,12 @@ inline void get_gsl_key(RedisModuleCtx *ctx) {
 	}
 }
 
-inline gsl_rstat_workspace* get_gsl_rstat_workspace(const RedisModuleString* name) {
-	RedisModuleString* w_ = NULL;
-	RedisModule_HashGet(GSL_KEY, REDISMODULE_HASH_NONE, name, &w_, NULL);
-	return (!w_) ? NULL : (gsl_rstat_workspace*)str_to_ptr(w_);
+template<typename T>
+inline T* get_gsl_object(const RedisModuleString* name) {
+	RedisModuleString* o_ = NULL;
+	RedisModule_HashGet(GSL_KEY, REDISMODULE_HASH_NONE, name, &o_, NULL);
+	return (o_) ? (T*)str_to_ptr(o_) : NULL;
 }
-
-inline gsl_rstat_quantile_workspace* get_gsl_rstat_quantile_workspace(const RedisModuleString* name) {
-	RedisModuleString* w_ = NULL;
-	RedisModule_HashGet(GSL_KEY, REDISMODULE_HASH_NONE, name, &w_, NULL);
-	return (!w_) ? NULL : (gsl_rstat_quantile_workspace*)str_to_ptr(w_);
-}
-
-inline gsl_histogram* get_gsl_histogram(const RedisModuleString* name) {
-	RedisModuleString* h_ = NULL;
-	RedisModule_HashGet(GSL_KEY, REDISMODULE_HASH_NONE, name, &h_, NULL);
-	return (!h_) ? NULL : (gsl_histogram*)str_to_ptr(h_);
-}
-
 
 #define REPLY_WITH_OK_NULL 									RedisModule_ReplyWithNull(ctx); \
     														return REDISMODULE_OK;
@@ -58,16 +45,14 @@ inline gsl_histogram* get_gsl_histogram(const RedisModuleString* name) {
     															return RedisModule_WrongArity(ctx); \
     														} \
     														get_gsl_key(ctx); \
-    														RedisModule_AutoMemory(ctx);
+    														RedisModule_AutoMemory(ctx);				
 
-#define GSL_RSTAT_WORKSPACE_EXIST(ctx, w) 					if (!w) { \
+#define GSL_RSTAT_WORKSPACE_INIT(ctx, n, name)            	GSL_INIT(n); \
+															gsl_rstat_workspace* w = get_gsl_object<gsl_rstat_workspace>(name); \
+															if (!w) { \
     															RedisModule_ReplyWithError(ctx, "GSL Running Statistics Workspace doesn't exist"); \
     															return REDISMODULE_ERR; \
     														}
-
-#define GSL_RSTAT_WORKSPACE_INIT(ctx, n, name)            	GSL_INIT(n); \
-															gsl_rstat_workspace* w = get_gsl_rstat_workspace(name); \
-															GSL_RSTAT_WORKSPACE_EXIST(ctx, w); \
 
 #define GSL_RSTAT_F(f)										int gsl_rstat_##f##_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) \
 															{ \
@@ -76,14 +61,12 @@ inline gsl_histogram* get_gsl_histogram(const RedisModuleString* name) {
     															return REDISMODULE_OK; \
 															}
 
-#define GSL_RSTAT_QUANTILE_WORKSPACE_EXIST(ctx, w) 			if (!w) { \
+#define GSL_RSTAT_QUANTILE_WORKSPACE_INIT(ctx, n, name)		GSL_INIT(n); \
+															gsl_rstat_quantile_workspace* w = get_gsl_object<gsl_rstat_quantile_workspace>(name); \
+															if (!w) { \
     															RedisModule_ReplyWithError(ctx, "GSL Running Statistics Quantiles Workspace doesn't exist"); \
     															return REDISMODULE_ERR; \
     														}
-
-#define GSL_RSTAT_QUANTILE_WORKSPACE_INIT(ctx, n, name)		GSL_INIT(n); \
-															gsl_rstat_quantile_workspace* w = get_gsl_rstat_quantile_workspace(name); \
-															GSL_RSTAT_QUANTILE_WORKSPACE_EXIST(ctx, w);
 															
 
 #define GSL_HISTOGRAM_DOESNT_EXIST(ctx, h)					if (!h) { \
@@ -92,7 +75,7 @@ inline gsl_histogram* get_gsl_histogram(const RedisModuleString* name) {
     														}
 
 #define GSL_HISTOGRAM_INIT(ctx, n, name)					GSL_INIT(n); \
-															gsl_histogram* h = get_gsl_histogram(name); \
+															gsl_histogram* h = get_gsl_object<gsl_histogram>(name); \
 															GSL_HISTOGRAM_DOESNT_EXIST(ctx, h);															  																													
 
 #define GSL_HISTOGRAM_F_DOUBLE(f) 							int gsl_histogram_##f##_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) \
@@ -107,12 +90,27 @@ inline gsl_histogram* get_gsl_histogram(const RedisModuleString* name) {
 																GSL_HISTOGRAM_INIT(ctx, 2, argv[1]); \
 																RedisModule_ReplyWithLongLong(ctx, (long long int)gsl_histogram_##f(h)); \
     															return REDISMODULE_OK; \
-															}															
+															}
+
+#define GSL_HISTOGRAM_OPERATION(o)							int gsl_histogram_##o##_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) \
+															{ \
+																GSL_HISTOGRAM_INIT(ctx, 3, argv[1]); \
+																gsl_histogram* h2 = get_gsl_object<gsl_histogram>(argv[2]); \
+    															GSL_HISTOGRAM_DOESNT_EXIST(ctx, h2); \
+    															gsl_histogram_##o(h, h2); \
+    															REPLY_WITH_OK_NULL; \
+															}
+
+#define GSL_HISOGRAM_PDF_INIT(ctx, n, name)     			GSL_INIT(n); \
+															gsl_histogram_pdf* p = get_gsl_object<gsl_histogram_pdf>(name); \
+    														if (!p) { \
+    															RedisModule_ReplyWithError(ctx, "GSL Histogram PDF doesn't exist"); \
+    															return REDISMODULE_ERR; \
+    														}
 
 #define CREATE_COMMAND(n, f) 								if (RedisModule_CreateCommand(ctx, n, f, "write deny-oom", 1, 1, 1) == REDISMODULE_ERR) { \
         														return REDISMODULE_ERR; \
     														}    												
-
 extern "C" {
 
 	int gsl_rstat_alloc_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
@@ -252,7 +250,7 @@ extern "C" {
 	int gsl_histogram_memcpy_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 	{		
 		GSL_HISTOGRAM_INIT(ctx, 3, argv[1]);
-		gsl_histogram* dest = get_gsl_histogram(argv[2]);    	
+		gsl_histogram* dest = get_gsl_object<gsl_histogram>(argv[2]);    	
     	GSL_HISTOGRAM_DOESNT_EXIST(ctx, dest);
 		gsl_histogram_memcpy(dest, h);
 		REPLY_WITH_OK_NULL;
@@ -344,6 +342,74 @@ extern "C" {
 	GSL_HISTOGRAM_F_DOUBLE(mean);
 	GSL_HISTOGRAM_F_DOUBLE(sigma);
 	GSL_HISTOGRAM_F_DOUBLE(sum);
+
+	int gsl_histogram_equal_bins_p_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+	{
+		GSL_HISTOGRAM_INIT(ctx, 3, argv[1]);
+		gsl_histogram* h2 = get_gsl_object<gsl_histogram>(argv[2]);    	
+    	GSL_HISTOGRAM_DOESNT_EXIST(ctx, h2);
+    	RedisModule_ReplyWithLongLong(ctx, (long long int) gsl_histogram_equal_bins_p(h, h2));
+    	return REDISMODULE_OK; 
+	}
+
+	GSL_HISTOGRAM_OPERATION(add);
+	GSL_HISTOGRAM_OPERATION(sub);
+	GSL_HISTOGRAM_OPERATION(mul);
+	GSL_HISTOGRAM_OPERATION(div);
+
+	int gsl_histogram_scale_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+	{
+		GSL_HISTOGRAM_INIT(ctx, 3, argv[1]);
+		double scale;		
+    	RedisModule_StringToDouble(argv[2], &scale);
+    	gsl_histogram_scale(h, scale);
+    	REPLY_WITH_OK_NULL;
+	}
+
+	int gsl_histogram_shift_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+	{
+		GSL_HISTOGRAM_INIT(ctx, 3, argv[1]);
+		double offset;		
+    	RedisModule_StringToDouble(argv[2], &offset);
+    	gsl_histogram_shift(h, offset);
+    	REPLY_WITH_OK_NULL;
+	}
+
+	int gsl_histogram_pdf_alloc_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+	{
+    	GSL_INIT(3);
+    	long long int n;
+    	RedisModule_StringToLongLong(argv[2], &n);		
+    	gsl_histogram_pdf* p = gsl_histogram_pdf_alloc((size_t)n);    	    	
+    	RedisModule_HashSet(GSL_KEY, REDISMODULE_HASH_NONE, argv[1], ptr_to_str(ctx, (void*)p), NULL);    	
+    	REPLY_WITH_OK_NULL;
+	}
+
+	int gsl_histogram_pdf_init_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+	{    
+    	GSL_HISOGRAM_PDF_INIT(ctx, 3, argv[1])
+    	gsl_histogram* h = get_gsl_object< gsl_histogram>(argv[2]); 
+    	GSL_HISTOGRAM_DOESNT_EXIST(ctx, h);
+    	gsl_histogram_pdf_init(p, h);
+    	REPLY_WITH_OK_NULL;
+	}
+
+	int gsl_histogram_pdf_free_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+	{
+    	GSL_HISOGRAM_PDF_INIT(ctx, 2, argv[1]) 	
+    	gsl_histogram_pdf_free(p);
+    	RedisModule_HashSet(GSL_KEY, REDISMODULE_HASH_NONE, argv[1], REDISMODULE_HASH_DELETE, NULL);
+    	REPLY_WITH_OK_NULL;
+	}
+
+	int  gsl_histogram_pdf_sample_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+	{
+    	GSL_HISOGRAM_PDF_INIT(ctx, 3, argv[1])
+    	double r;
+    	RedisModule_StringToDouble(argv[2], &r);	   	
+    	RedisModule_ReplyWithDouble(ctx, gsl_histogram_pdf_sample(p, r));
+    	return REDISMODULE_OK; 
+	}
 	
 	int RedisModule_OnLoad(RedisModuleCtx* ctx, RedisModuleString __attribute__((unused)) **argv, int  __attribute__((unused)) argc) {		
     	if (RedisModule_Init(ctx,"RedisGSL", 1, REDISMODULE_APIVER_1) == REDISMODULE_ERR) {
@@ -396,7 +462,18 @@ extern "C" {
     	CREATE_COMMAND("gsl_histogram_min_bin", gsl_histogram_min_bin_RedisCommand); 
     	CREATE_COMMAND("gsl_histogram_mean", gsl_histogram_mean_RedisCommand);    	     
     	CREATE_COMMAND("gsl_histogram_sigma", gsl_histogram_sigma_RedisCommand); 
-    	CREATE_COMMAND("gsl_histogram_sum", gsl_histogram_sum_RedisCommand); 
+    	CREATE_COMMAND("gsl_histogram_sum", gsl_histogram_sum_RedisCommand);
+    	CREATE_COMMAND("gsl_histogram_equal_bins_p", gsl_histogram_equal_bins_p_RedisCommand); 
+    	CREATE_COMMAND("gsl_histogram_add", gsl_histogram_add_RedisCommand);
+    	CREATE_COMMAND("gsl_histogram_sub", gsl_histogram_sub_RedisCommand);
+    	CREATE_COMMAND("gsl_histogram_mul", gsl_histogram_mul_RedisCommand); 
+    	CREATE_COMMAND("gsl_histogram_div", gsl_histogram_div_RedisCommand); 
+    	CREATE_COMMAND("gsl_histogram_scale", gsl_histogram_scale_RedisCommand); 
+    	CREATE_COMMAND("gsl_histogram_shift", gsl_histogram_shift_RedisCommand); 
+    	CREATE_COMMAND("gsl_histogram_pdf_alloc", gsl_histogram_pdf_alloc_RedisCommand); 
+    	CREATE_COMMAND("gsl_histogram_pdf_init", gsl_histogram_pdf_init_RedisCommand); 
+    	CREATE_COMMAND("gsl_histogram_pdf_free", gsl_histogram_pdf_free_RedisCommand); 
+    	CREATE_COMMAND("gsl_histogram_pdf_sample", gsl_histogram_pdf_sample_RedisCommand); 
     	    	        	   
     	return REDISMODULE_OK;
 	}
