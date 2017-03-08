@@ -167,7 +167,7 @@ extern "C" {
 	{
     	GSL_INIT(3);		
 		double x;
-    	RedisModule_StringToDouble(argv[2], &x);    	
+    	RedisModule_StringToDouble(argv[2], &x);
     	gsl_rstat_quantile_workspace* w = gsl_rstat_quantile_alloc(x);
     	RedisModule_HashSet(GSL_KEY, REDISMODULE_HASH_NONE, argv[1], ptr_to_str(ctx, (void*)w), NULL);    	
     	REPLY_WITH_OK_NULL;

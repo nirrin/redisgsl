@@ -34,24 +34,27 @@ run: clear
 	rm -f *.rdb	
 	redis-server /etc/redis.conf --loadmodule ./libredisgsl.so
 
+flushdb:
+	redis-cli FLUSHDB
+
 test-rstat:
 	redis-cli gsl_rstat_alloc A
 	for x in 1 2 3 4 5 6 ; do \
 		redis-cli gsl_rstat_add A $$x ; \
-	done
-	redis-cli gsl_rstat_n A
-	redis-cli gsl_rstat_min A
-	redis-cli gsl_rstat_max A
-	redis-cli gsl_rstat_mean A
-	redis-cli gsl_rstat_variance A
-	redis-cli gsl_rstat_sd A
-	redis-cli gsl_rstat_rms A
-	redis-cli gsl_rstat_sd_mean A
-	redis-cli gsl_rstat_median A
-	redis-cli gsl_rstat_skew A
-	redis-cli gsl_rstat_kurtosis A
+	done	
+	[ `redis-cli gsl_rstat_n A`  == '6' ]
+	[ `redis-cli gsl_rstat_min A` == '1' ]
+	[ `redis-cli gsl_rstat_max A` == '6' ]
+	[ `redis-cli gsl_rstat_mean A` == '3.5' ]
+	[ `redis-cli gsl_rstat_variance A` == '3.5' ]
+	[ `redis-cli gsl_rstat_sd A` == '1.8708286933869707' ]
+	[ `redis-cli gsl_rstat_rms A` == '3.8944404818493079' ]
+	[ `redis-cli gsl_rstat_sd_mean A` == '0.76376261582597338' ]
+	[ `redis-cli gsl_rstat_median A` == '3' ]
+	[ `redis-cli gsl_rstat_skew A` == '0' ]
+	[ `redis-cli gsl_rstat_kurtosis A` == '-1.7976190476190474' ]
 	redis-cli gsl_rstat_reset A
-	redis-cli gsl_rstat_n A
+	[ `redis-cli gsl_rstat_n A` == '0' ]
 	redis-cli gsl_rstat_free A
 	redis-cli HGETALL GSL
 
@@ -59,19 +62,21 @@ QUANTILES := 0.05 0.5 0.95
 
 test-rstat-quantile:
 	for q in $(QUANTILES) ; do \
-		redis-cli gsl_rstat_quantile_alloc A_$$q q ; \
+		redis-cli gsl_rstat_quantile_alloc A_$$q $$q ; \
 	done	
 	for q in $(QUANTILES) ; do \
-		for x in 1 2 3 4 5 6 ; do \
-			redis-cli gsl_rstat_quantile_add A_$$q $$x ; \
+		for x in `seq 1 100` ; do \
+			redis-cli gsl_rstat_quantile_add A_$$q $$x > /dev/null ; \
 		done \
-	done 
+	done	
+	[ `redis-cli gsl_rstat_quantile_get A_0.05` == '5' ]
+	[ `redis-cli gsl_rstat_quantile_get A_0.5` == '50' ]
+	[ `redis-cli gsl_rstat_quantile_get A_0.95` == '95' ]
 	for q in $(QUANTILES) ; do \
-		redis-cli gsl_rstat_quantile_get A_$$q ; \
 		redis-cli gsl_rstat_quantile_reset A_$$q ; \
-		redis-cli gsl_rstat_quantile_get A_$$q ; \
+		[ `redis-cli gsl_rstat_quantile_get A_$$q` == '0' ] ; \
 		redis-cli gsl_rstat_quantile_free A_$$q ; \
-	done		
+	done
 	redis-cli HGETALL GSL
 
 HISTOGRAMS := A B
