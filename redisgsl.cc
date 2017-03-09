@@ -38,6 +38,18 @@ inline T* get_gsl_object(const RedisModuleString* name) {
 	return (o_) ? (T*)str_to_ptr(o_) : NULL;
 }
 
+inline double get_double(const RedisModuleString* str) {
+	double x;
+    RedisModule_StringToDouble(str, &x);
+    return x;
+}
+
+inline double get_long_long(const RedisModuleString* str) {
+	long long int x;
+    RedisModule_StringToLongLong(str, &x);
+    return x;
+}
+
 #define REPLY_WITH_OK_NULL 									RedisModule_ReplyWithNull(ctx); \
     														return REDISMODULE_OK;
 
@@ -101,6 +113,16 @@ inline T* get_gsl_object(const RedisModuleString* name) {
     															REPLY_WITH_OK_NULL; \
 															}
 
+#define GSL_HISTOGRAM_OPERATION_X(o)						int gsl_histogram_##o##_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) \
+															{ \
+																GSL_HISTOGRAM_INIT(ctx, 3, argv[1]); \
+																double x; \
+    															RedisModule_StringToDouble(argv[2], &x); \
+    															gsl_histogram_##o(h, x); \
+    															REPLY_WITH_OK_NULL; \
+															}
+
+
 #define GSL_HISOGRAM_PDF_INIT(ctx, n, name)     			GSL_INIT(n); \
 															gsl_histogram_pdf* p = get_gsl_object<gsl_histogram_pdf>(name); \
     														if (!p) { \
@@ -146,8 +168,7 @@ extern "C" {
 	int gsl_rstat_add_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 	{
     	GSL_RSTAT_WORKSPACE_INIT(ctx, 3, argv[1]);		
-		double x;
-    	RedisModule_StringToDouble(argv[2], &x);
+		const double x = get_double(argv[2]);    	
     	gsl_rstat_add(x, w);    	    	
     	REPLY_WITH_OK_NULL;
 	}
@@ -166,8 +187,7 @@ extern "C" {
 	int gsl_rstat_quantile_alloc_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 	{
     	GSL_INIT(3);		
-		double x;
-    	RedisModule_StringToDouble(argv[2], &x);
+		const double x = get_double(argv[2]);    
     	gsl_rstat_quantile_workspace* w = gsl_rstat_quantile_alloc(x);
     	RedisModule_HashSet(GSL_KEY, REDISMODULE_HASH_NONE, argv[1], ptr_to_str(ctx, (void*)w), NULL);    	
     	REPLY_WITH_OK_NULL;
@@ -191,8 +211,7 @@ extern "C" {
 	int gsl_rstat_quantile_add_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 	{
     	GSL_RSTAT_QUANTILE_WORKSPACE_INIT(ctx, 3, argv[1]);
-    	double x;
-    	RedisModule_StringToDouble(argv[2], &x);    	
+    	const double x = get_double(argv[2]);    	
     	gsl_rstat_quantile_add(x, w);    	    	    	
     	REPLY_WITH_OK_NULL;
 	}
@@ -207,10 +226,9 @@ extern "C" {
 	int gsl_histogram_alloc_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 	{
 		GSL_INIT(3);
-		long long int n;
-    	RedisModule_StringToLongLong(argv[2], &n);     	
+		const long long int n = get_long_long(argv[2]);    	    
     	gsl_histogram* h = gsl_histogram_alloc(n);    	
-    	RedisModule_HashSet(GSL_KEY, REDISMODULE_HASH_NONE, argv[1], ptr_to_str(ctx, (void*)h), NULL);    	
+    	RedisModule_HashSet(GSL_KEY, REDISMODULE_HASH_NONE, argv[1], ptr_to_str(ctx, (void*)h), NULL);    	    	
     	REPLY_WITH_OK_NULL;
 	}
 
@@ -219,10 +237,8 @@ extern "C" {
 		GSL_HISTOGRAM_INIT(ctx, 3, argv[1]);
     	const size_t n = argc - 2;
     	double range[n];
-    	for (int i = 2; i < argc; i++) {
-    		double r;
-    		RedisModule_StringToDouble(argv[i], &r);    		
-    		range[i - 2] = r;
+    	for (int i = 2; i < argc; i++) {    		 	
+    		range[i - 2] = get_double(argv[i]);
     	}
     	gsl_histogram_set_ranges(h, range, n);
 		REPLY_WITH_OK_NULL;
@@ -231,10 +247,8 @@ extern "C" {
 	int gsl_histogram_set_ranges_uniform_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 	{
 		GSL_HISTOGRAM_INIT(ctx, 4, argv[1]);		
-		double xmin;
-		double xmax;
-    	RedisModule_StringToDouble(argv[2], &xmin); 
-    	RedisModule_StringToDouble(argv[3], &xmax); 
+		const double xmin = get_double(argv[2]);
+		const double xmax = get_double(argv[3]);    	
     	gsl_histogram_set_ranges_uniform(h, xmin, xmax);    	
 		REPLY_WITH_OK_NULL;
 	}
@@ -267,8 +281,7 @@ extern "C" {
 	int gsl_histogram_increment_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 	{
 		GSL_HISTOGRAM_INIT(ctx, 3, argv[1]);
-		double x;
-    	RedisModule_StringToDouble(argv[2], &x); 
+		const double x = get_double(argv[2]);    	
     	gsl_histogram_increment(h, x);
 		REPLY_WITH_OK_NULL;
 	}
@@ -276,10 +289,8 @@ extern "C" {
 	int gsl_histogram_accumulate_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 	{
 		GSL_HISTOGRAM_INIT(ctx, 4, argv[1]);
-		double x;
-		double weight;
-    	RedisModule_StringToDouble(argv[2], &x);
-    	RedisModule_StringToDouble(argv[3], &weight);
+		const double x = get_double(argv[2]);
+		const double weight = get_double(argv[3]);    	
     	gsl_histogram_accumulate(h, x, weight);
 		REPLY_WITH_OK_NULL;
 	}
@@ -287,8 +298,7 @@ extern "C" {
 	int gsl_histogram_get_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 	{
 		GSL_HISTOGRAM_INIT(ctx, 3, argv[1]);
-		long long int i;		
-    	RedisModule_StringToLongLong(argv[2], &i);
+		const long long int i = get_long_long(argv[2]);    
 		RedisModule_ReplyWithDouble(ctx, gsl_histogram_get(h, (size_t)i));
     	return REDISMODULE_OK;
 	}
@@ -296,8 +306,7 @@ extern "C" {
 	int gsl_histogram_get_range_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 	{
 		GSL_HISTOGRAM_INIT(ctx, 3, argv[1]);
-		long long int i;		
-    	RedisModule_StringToLongLong(argv[2], &i);
+		const long long int i = get_long_long(argv[2]);    	
     	double lower;
     	double upper;
     	if (gsl_histogram_get_range(h, (size_t)i, &lower, &upper) != 0) {
@@ -316,7 +325,7 @@ extern "C" {
 
 	int gsl_histogram_reset_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 	{
-		GSL_HISTOGRAM_INIT(ctx, 2, argv[1]);
+		GSL_HISTOGRAM_INIT(ctx, 2, argv[1]);		
 		gsl_histogram_reset(h);
     	REPLY_WITH_OK_NULL;
 	}
@@ -324,8 +333,7 @@ extern "C" {
 	int gsl_histogram_find_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 	{
 		GSL_HISTOGRAM_INIT(ctx, 3, argv[1]);
-		double x;		
-    	RedisModule_StringToDouble(argv[2], &x);    	
+		const double x = get_double(argv[2]);    	
     	size_t i;
     	if (gsl_histogram_find(h, x, &i) != 0) {
     		RedisModule_ReplyWithError(ctx, "GSL Histogram: coordinate outside the valid range of histogram");
@@ -356,30 +364,13 @@ extern "C" {
 	GSL_HISTOGRAM_OPERATION(sub);
 	GSL_HISTOGRAM_OPERATION(mul);
 	GSL_HISTOGRAM_OPERATION(div);
-
-	int gsl_histogram_scale_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
-	{
-		GSL_HISTOGRAM_INIT(ctx, 3, argv[1]);
-		double scale;		
-    	RedisModule_StringToDouble(argv[2], &scale);
-    	gsl_histogram_scale(h, scale);
-    	REPLY_WITH_OK_NULL;
-	}
-
-	int gsl_histogram_shift_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
-	{
-		GSL_HISTOGRAM_INIT(ctx, 3, argv[1]);
-		double offset;		
-    	RedisModule_StringToDouble(argv[2], &offset);
-    	gsl_histogram_shift(h, offset);
-    	REPLY_WITH_OK_NULL;
-	}
+	GSL_HISTOGRAM_OPERATION_X(scale);
+	GSL_HISTOGRAM_OPERATION_X(shift);
 
 	int gsl_histogram_pdf_alloc_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 	{
     	GSL_INIT(3);
-    	long long int n;
-    	RedisModule_StringToLongLong(argv[2], &n);		
+    	const long long int n = get_long_long(argv[2]);    	
     	gsl_histogram_pdf* p = gsl_histogram_pdf_alloc((size_t)n);    	    	
     	RedisModule_HashSet(GSL_KEY, REDISMODULE_HASH_NONE, argv[1], ptr_to_str(ctx, (void*)p), NULL);    	
     	REPLY_WITH_OK_NULL;
@@ -390,7 +381,7 @@ extern "C" {
     	GSL_HISOGRAM_PDF_INIT(ctx, 3, argv[1])
     	gsl_histogram* h = get_gsl_object< gsl_histogram>(argv[2]); 
     	GSL_HISTOGRAM_DOESNT_EXIST(ctx, h);
-    	gsl_histogram_pdf_init(p, h);
+		gsl_histogram_pdf_init(p, h);
     	REPLY_WITH_OK_NULL;
 	}
 
@@ -405,8 +396,7 @@ extern "C" {
 	int  gsl_histogram_pdf_sample_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 	{
     	GSL_HISOGRAM_PDF_INIT(ctx, 3, argv[1])
-    	double r;
-    	RedisModule_StringToDouble(argv[2], &r);	   	
+    	const double r = get_double(argv[2]);
     	RedisModule_ReplyWithDouble(ctx, gsl_histogram_pdf_sample(p, r));
     	return REDISMODULE_OK; 
 	}
@@ -454,7 +444,7 @@ extern "C" {
     	CREATE_COMMAND("gsl_histogram_max", gsl_histogram_max_RedisCommand);	
     	CREATE_COMMAND("gsl_histogram_min", gsl_histogram_min_RedisCommand);	
     	CREATE_COMMAND("gsl_histogram_bins", gsl_histogram_bins_RedisCommand); 
-    	CREATE_COMMAND("gsl_histogram_reset", gsl_histogram_bins_RedisCommand);
+    	CREATE_COMMAND("gsl_histogram_reset", gsl_histogram_reset_RedisCommand);
     	CREATE_COMMAND("gsl_histogram_find", gsl_histogram_find_RedisCommand); 
     	CREATE_COMMAND("gsl_histogram_max_val", gsl_histogram_max_val_RedisCommand);
     	CREATE_COMMAND("gsl_histogram_max_bin", gsl_histogram_max_bin_RedisCommand);
