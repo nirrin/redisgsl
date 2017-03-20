@@ -11,14 +11,8 @@
 #include <gsl/gsl_version.h>
 #include <gsl/gsl_histogram.h>
 #include <err/gsl_errno.h>
-
-inline RedisModuleString* ptr_to_str(RedisModuleCtx *ctx, const void* p_) {	
-	return RedisModule_CreateStringPrintf(ctx, "%" PRIu64, (unsigned long long)p_);	
-}
-
-inline void* str_to_ptr(const RedisModuleString* str_) {	
-	return (void*)atoll(RedisModule_StringPtrLen(str_, NULL));
-}
+#include "gsl_serialize.h"
+#include "redismodule_helpers.h"
 
 RedisModuleString* GSL_NAME = NULL;
 RedisModuleKey* GSL_KEY = NULL;
@@ -38,20 +32,7 @@ inline T* get_gsl_object(const RedisModuleString* name) {
 	return (o_) ? (T*)str_to_ptr(o_) : NULL;
 }
 
-inline double get_double(const RedisModuleString* str) {
-	double x;
-    RedisModule_StringToDouble(str, &x);
-    return x;
-}
 
-inline double get_long_long(const RedisModuleString* str) {
-	long long int x;
-    RedisModule_StringToLongLong(str, &x);
-    return x;
-}
-
-#define REPLY_WITH_OK_NULL 									RedisModule_ReplyWithNull(ctx); \
-    														return REDISMODULE_OK;
 
 #define GSL_INIT(n)											if (argc < n) { \
     															return RedisModule_WrongArity(ctx); \
@@ -379,7 +360,7 @@ extern "C" {
 	int gsl_histogram_pdf_init_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 	{    
     	GSL_HISOGRAM_PDF_INIT(ctx, 3, argv[1])
-    	gsl_histogram* h = get_gsl_object< gsl_histogram>(argv[2]); 
+    	gsl_histogram* h = get_gsl_object<gsl_histogram>(argv[2]); 
     	GSL_HISTOGRAM_DOESNT_EXIST(ctx, h);
 		gsl_histogram_pdf_init(p, h);
     	REPLY_WITH_OK_NULL;
